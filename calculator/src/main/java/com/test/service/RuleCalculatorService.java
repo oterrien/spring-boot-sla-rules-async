@@ -3,6 +3,7 @@ package com.test.service;
 import com.rabbitmq.client.*;
 import com.test.exchange.Request;
 import com.test.exchange.Response;
+import com.test.invoice.Invoice;
 import com.test.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +44,7 @@ public class RuleCalculatorService {
             public void handleDelivery(String consumerTag, Envelope envelope,
                                        AMQP.BasicProperties properties, byte[] body) throws IOException {
 
-                Request request = JsonUtils.parse(new String(body, "UTF-8"), Request.class);
+                Request<Invoice> request = JsonUtils.parse(new String(body, "UTF-8"), Request.class, Invoice.class);
 
                 log.info(String.format("####-Request received for page #%d - [%s]", request.getPageIndex(), properties.getCorrelationId()));
 
@@ -52,7 +53,7 @@ public class RuleCalculatorService {
                         .correlationId(properties.getCorrelationId())
                         .build();
 
-                Response result = ruleService.applyRules(request);
+                Response<Invoice> result = ruleService.applyRules(request);
 
                 String message = JsonUtils.serialize(result);
 

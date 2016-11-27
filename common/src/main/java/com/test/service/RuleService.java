@@ -18,16 +18,17 @@ import java.util.stream.Collectors;
 @SuppressWarnings("unchecked")
 public class RuleService {
 
-    public Response applyRules(Request request) {
+    public <T> Response<T> applyRules(Request<T> request) {
 
-        wait_(request.getEntities().size());
+        //wait_(request.getEntities().size());
 
-        Response response = new Response();
+        Response<T> response = new Response<>();
+        response.setPageIndex(request.getPageIndex());
 
         // chain all rules sorted by priority
         Consumer<Element> ruleApplier = chainRule(request.getRules());
 
-        Map<Element.Status, List<Element<Invoice>>> mapResult = request.
+        Map<Element.Status, List<Element<T>>> mapResult = request.
                 getEntities().
                 parallelStream().
                 map(Element::new).
@@ -39,6 +40,9 @@ public class RuleService {
 
         Optional.ofNullable(mapResult.get(Element.Status.REJECTED)).
                 ifPresent(p -> response.getRejectedElements().addAll(p));
+
+        log.warn(String.format("####-number of accepted elements in page #%d : %d", response.getPageIndex(), response.getAcceptedElements().size()));
+        log.warn(String.format("####-number of rejected elements in page #%d : %d", response.getPageIndex(), response.getRejectedElements().size()));
 
         return response;
     }

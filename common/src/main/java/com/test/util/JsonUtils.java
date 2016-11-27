@@ -1,6 +1,7 @@
 package com.test.util;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import lombok.AccessLevel;
@@ -22,6 +23,11 @@ public final class JsonUtils {
 
     public static <T> T parse(String content, Class<T> type) throws IOException {
         return MAPPER.readValue(content, type);
+    }
+
+    public static <T, G> T parse(String content, Class<T> type, Class<G> parametrizedType) throws IOException {
+        JavaType javaType = MAPPER.getTypeFactory().constructParametricType(type, parametrizedType);
+        return MAPPER.readValue(content, javaType);
     }
 
     public static <T> String serialize(T obj) throws IOException {

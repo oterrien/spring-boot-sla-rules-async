@@ -1,5 +1,6 @@
 package com.test.controller;
 
+import com.test.service.AsyncInvoiceRuleService;
 import com.test.service.InvoiceRuleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,11 +16,19 @@ public class InvoiceRuleController {
     @Autowired
     private InvoiceRuleService invoiceRuleService;
 
+    @Autowired
+    private AsyncInvoiceRuleService asyncInvoiceRuleService;
+
     @RequestMapping(method = RequestMethod.POST, value = "/loadAndApplyRule")
     @ResponseBody
     public ResponseEntity loadAndApplyRule(@RequestParam(name = "pageSize", defaultValue = "0") int pageSize) {
 
-        invoiceRuleService.loadAndApplyRules(pageSize);
+        if (pageSize <= 0) {
+            invoiceRuleService.loadAndApplyRules();
+        } else {
+            asyncInvoiceRuleService.loadAndApplyRules(pageSize);
+        }
+
         return new ResponseEntity(HttpStatus.FOUND);
     }
 }

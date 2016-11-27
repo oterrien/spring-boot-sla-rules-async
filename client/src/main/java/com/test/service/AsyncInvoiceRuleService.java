@@ -3,7 +3,9 @@ package com.test.service;
 import com.rabbitmq.client.*;
 import com.test.exchange.Request;
 import com.test.exchange.Response;
+import com.test.invoice.Invoice;
 import com.test.persistence.repository.IInvoiceRepository;
+import com.test.persistence.service.RulePersistenceService;
 import com.test.rule.Rule;
 import com.test.util.JsonUtils;
 import lombok.Data;
@@ -16,23 +18,24 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 @Profile("rabbitmq")
 @Service
 @Slf4j
+@SuppressWarnings("unchecked")
 public class AsyncInvoiceRuleService {
 
     @Value("${rabbitmq.queue.rule.name}")
     private String queueName;
+
+    @Autowired
+    private RulePersistenceService rulePersistenceService;
 
     @Autowired
     private IInvoiceRepository invoiceRepository;
@@ -43,58 +46,61 @@ public class AsyncInvoiceRuleService {
     @Autowired
     private Channel channel;
 
-    private Map<String, AtomicResponse> responseMap = new ConcurrentHashMap<>();
+    private Map<String, Optional<AtomicResponse<Invoice>>> responseMap = new ConcurrentHashMap<>();
 
-    @Data
-    @RequiredArgsConstructor
-    class AtomicResponse {
+    private String replyQueueName;
 
-        private final CountDownLatch countDownLatch;
-        private final List<Response> responses = new ArrayList<>();
+    @PostConstruct
+    public void init() throws IOException {
 
-        void addAndCountdown(Response response) {
-            synchronized (this) {
-                responses.add(response);
-                countDownLatch.countDown();
+        this.replyQueueName = channel.queueDeclare().getQueue();
+
+        Consumer consumer = new DefaultConsumer(channel) {
+            @Override
+            public void handleDelivery(String consumerTag, Envelope envelope,
+                                       AMQP.BasicProperties properties, byte[] body) {
+                try {
+                    Response<Invoice> response = JsonUtils.parse(new String(body, "UTF-8"), Response.class, Invoice.class);
+
+                    log.info(String.format("####-Response received for page #%d - [%s]", response.getPageIndex(), properties.getCorrelationId()));
+
+                    responseMap.get(properties.getCorrelationId()).
+                            ifPresent(p -> p.addAndCountdown(response));
+
+                } catch (IOException e) {
+                    log.error(e.getMessage(), e);
+                }
             }
-        }
+        };
+
+        channel.basicConsume(replyQueueName, true, consumer);
     }
 
-    public void loadAndApplyRules(List<Rule> rules, final int pageSize) {
+    public void loadAndApplyRules(final int pageSize) {
+
+        final List<Rule> rules = rulePersistenceService.getAllByPriority();
 
         final String correlationId = UUID.randomUUID().toString();
 
         try {
-            int count = (int) invoiceRepository.count();
-            final int numberOfPages = (count % pageSize == 0) ? count / pageSize : count / pageSize + 1;
+            final int numberOfPages = getNumberOfPages(pageSize);
 
             log.info(String.format("####-Number of pages to request : %d - [%s]", numberOfPages, correlationId));
 
-            String replyQueueName = channel.queueDeclare().getQueue();
-            channel.basicConsume(replyQueueName, true, createConsumer());
-
-            responseMap.put(correlationId, new AtomicResponse(new CountDownLatch(numberOfPages)));
+            responseMap.put(correlationId, Optional.of(new AtomicResponse<>(new CountDownLatch(numberOfPages))));
 
             IntStream.range(0, numberOfPages).
                     parallel().
                     mapToObj(i -> new PageRequest(i, pageSize)).
                     map(pageRequest -> invoiceRepository.findAll(pageRequest)).
-                    map(page -> new Request(rules, page.getContent(), page.getNumber())).
+                    map(page -> new Request<>(rules, page.getContent(), page.getNumber())).
                     forEach(request -> sendRequest(replyQueueName, correlationId, request));
 
             responseMap.get(correlationId).
-                    getCountDownLatch().await();
+                    ifPresent(p -> p.await());
 
-            AtomicInteger numberOfAcceptedElements = new AtomicInteger(0);
-            AtomicInteger numberOfRejectedElements = new AtomicInteger(0);
-            responseMap.get(correlationId).getResponses().
-                    parallelStream().
-                    peek(response -> numberOfAcceptedElements.getAndAdd(response.getAcceptedElements().size())).
-                    peek(response -> numberOfRejectedElements.getAndAdd(response.getRejectedElements().size())).
-                    forEach(response -> responseHandlerService.handleResponse(response));
-
-            log.warn(String.format("###-\tnumber of accepted elements : %d", numberOfAcceptedElements.get()));
-            log.warn(String.format("###-\tnumber of rejected elements : %d", numberOfRejectedElements.get()));
+            responseMap.get(correlationId).
+                    ifPresent(p -> handleResponse(p.getResponses()));
 
         } catch (Exception e) {
             log.error(e.getMessage(), e);
@@ -103,7 +109,17 @@ public class AsyncInvoiceRuleService {
         }
     }
 
-    private void sendRequest(String replyQueueName, String correlationId, Request request) {
+    private int getNumberOfPages(int pageSize) {
+
+        int count = (int) invoiceRepository.count();
+        int numberOfPages = count / pageSize;
+        if (count % pageSize != 0) {
+            numberOfPages++;
+        }
+        return numberOfPages;
+    }
+
+    private void sendRequest(String replyQueueName, String correlationId, Request<Invoice> request) {
 
         try {
             AMQP.BasicProperties props = new AMQP.BasicProperties
@@ -123,19 +139,17 @@ public class AsyncInvoiceRuleService {
         }
     }
 
+/*    @SuppressWarnings("unchecked")
     private Consumer createConsumer() {
 
         return new DefaultConsumer(channel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope,
                                        AMQP.BasicProperties properties, byte[] body) {
-
                 try {
-                    Response response = JsonUtils.parse(new String(body, "UTF-8"), Response.class);
+                    Response<Invoice> response = JsonUtils.parse(new String(body, "UTF-8"), Response.class, Invoice.class);
 
                     log.info(String.format("####-Response received for page #%d - [%s]", response.getPageIndex(), properties.getCorrelationId()));
-
-                    //responseHandlerService.handleResponse(response);
 
                     responseMap.get(properties.getCorrelationId()).addAndCountdown(response);
 
@@ -144,5 +158,41 @@ public class AsyncInvoiceRuleService {
                 }
             }
         };
+    }*/
+
+    private void handleResponse(List<Response<Invoice>> responseFragments) {
+
+        Response<Invoice> response = new Response<>();
+
+        responseFragments.
+                parallelStream().
+                peek(resp -> log.warn(String.format("####-number of accepted elements in page #%d : %d", resp.getPageIndex(), resp.getAcceptedElements().size()))).
+                peek(resp -> log.warn(String.format("####-number of rejected elements in page #%d : %d", resp.getPageIndex(), resp.getRejectedElements().size()))).
+                peek(resp -> response.getAcceptedElements().addAll(resp.getAcceptedElements())).
+                peek(resp -> response.getRejectedElements().addAll(resp.getRejectedElements())).
+                count();
+
+        responseHandlerService.handleResponse(response);
+    }
+
+    @Data
+    @RequiredArgsConstructor
+    static class AtomicResponse<T> {
+
+        private final CountDownLatch countDownLatch;
+        private final List<Response<T>> responses = new ArrayList<>();
+
+        synchronized void addAndCountdown(Response<T> response) {
+            responses.add(response);
+            countDownLatch.countDown();
+        }
+
+        void await(){
+            try {
+                countDownLatch.await();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 }

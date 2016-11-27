@@ -19,7 +19,8 @@ public class RulePersistenceService {
 
     public List<Rule> getAllByPriority() {
 
-        Sort sort = new Sort(Sort.Direction.ASC, "priority");
+        Sort sort = new Sort(Sort.Direction.ASC, "priority").
+                and(new Sort(Sort.Direction.ASC, "id"));
         return ruleRepository.findAll(sort);
     }
 

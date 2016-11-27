@@ -10,7 +10,7 @@ import java.util.List;
 
 @Data
 @NoArgsConstructor
-public class Response{
+public class Response {
 
     private final List<Invoice> acceptedElements = new ArrayList<>();
 

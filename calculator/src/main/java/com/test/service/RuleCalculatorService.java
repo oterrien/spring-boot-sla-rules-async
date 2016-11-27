@@ -1,10 +1,8 @@
 package com.test.service;
 
 import com.rabbitmq.client.*;
-import com.test.exchange.Response;
-import com.test.invoice.Invoice;
 import com.test.exchange.Request;
-import com.test.rule.Element;
+import com.test.exchange.Response;
 import com.test.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,8 +11,6 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 @Service
 @Slf4j

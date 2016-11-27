@@ -16,7 +16,7 @@ public class RejectionCode {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ID")
-    private long  id;
+    private long id;
 
     @Column(name = "CODE")
     private String code;

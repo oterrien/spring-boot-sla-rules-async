@@ -81,8 +81,8 @@ public class Parameter<T extends Comparable> {
             return transformer.apply(s);
         }
 
-        private static LocalDate parseDate(String dateString){
-            return  LocalDate.parse(dateString, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        private static LocalDate parseDate(String dateString) {
+            return LocalDate.parse(dateString, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         }
     }
 

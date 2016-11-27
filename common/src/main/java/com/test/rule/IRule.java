@@ -37,7 +37,7 @@ public interface IRule extends Predicate, Consumer<Element>, Comparable<IRule> {
     @Override
     default void accept(Element element) {
         boolean isAccepted = test(element.getBean());
-        if (!isAccepted){
+        if (!isAccepted) {
             element.getRejectionCodes().add(getRejectionCode());
             element.setStatus(Element.Status.REJECTED);
         }

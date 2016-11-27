@@ -54,8 +54,12 @@ public class AsyncInvoiceRuleService {
     public void init() throws IOException {
 
         this.replyQueueName = channel.queueDeclare().getQueue();
+        channel.basicConsume(replyQueueName, true, createConsumer());
+    }
 
-        Consumer consumer = new DefaultConsumer(channel) {
+    private Consumer createConsumer() {
+
+        return new DefaultConsumer(channel) {
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope,
                                        AMQP.BasicProperties properties, byte[] body) {
@@ -72,11 +76,9 @@ public class AsyncInvoiceRuleService {
                 }
             }
         };
-
-        channel.basicConsume(replyQueueName, true, consumer);
     }
 
-    public void loadAndApplyRules(final int pageSize) {
+    public void loadAndApplyRules(int pageSize) {
 
         final List<Rule> rules = rulePersistenceService.getAllByPriority();
 
@@ -84,10 +86,9 @@ public class AsyncInvoiceRuleService {
 
         try {
             final int numberOfPages = getNumberOfPages(pageSize);
+            responseMap.put(correlationId, Optional.of(new AtomicResponse<>(new CountDownLatch(numberOfPages))));
 
             log.info(String.format("####-Number of pages to request : %d - [%s]", numberOfPages, correlationId));
-
-            responseMap.put(correlationId, Optional.of(new AtomicResponse<>(new CountDownLatch(numberOfPages))));
 
             IntStream.range(0, numberOfPages).
                     parallel().
@@ -97,10 +98,11 @@ public class AsyncInvoiceRuleService {
                     forEach(request -> sendRequest(replyQueueName, correlationId, request));
 
             responseMap.get(correlationId).
-                    ifPresent(p -> p.await());
+                    ifPresent(AtomicResponse::await);
 
             responseMap.get(correlationId).
-                    ifPresent(p -> handleResponse(p.getResponses()));
+                    map(AtomicResponse::getResponses).
+                    ifPresent(this::handleResponse);
 
         } catch (Exception e) {
             log.error(e.getMessage(), e);
@@ -139,32 +141,11 @@ public class AsyncInvoiceRuleService {
         }
     }
 
-/*    @SuppressWarnings("unchecked")
-    private Consumer createConsumer() {
-
-        return new DefaultConsumer(channel) {
-            @Override
-            public void handleDelivery(String consumerTag, Envelope envelope,
-                                       AMQP.BasicProperties properties, byte[] body) {
-                try {
-                    Response<Invoice> response = JsonUtils.parse(new String(body, "UTF-8"), Response.class, Invoice.class);
-
-                    log.info(String.format("####-Response received for page #%d - [%s]", response.getPageIndex(), properties.getCorrelationId()));
-
-                    responseMap.get(properties.getCorrelationId()).addAndCountdown(response);
-
-                } catch (IOException e) {
-                    log.error(e.getMessage(), e);
-                }
-            }
-        };
-    }*/
-
-    private void handleResponse(List<Response<Invoice>> responseFragments) {
+    private void handleResponse(List<Response<Invoice>> responseSplitByPage) {
 
         Response<Invoice> response = new Response<>();
 
-        responseFragments.
+        responseSplitByPage.
                 parallelStream().
                 peek(resp -> log.warn(String.format("####-number of accepted elements in page #%d : %d", resp.getPageIndex(), resp.getAcceptedElements().size()))).
                 peek(resp -> log.warn(String.format("####-number of rejected elements in page #%d : %d", resp.getPageIndex(), resp.getRejectedElements().size()))).
@@ -180,14 +161,14 @@ public class AsyncInvoiceRuleService {
     static class AtomicResponse<T> {
 
         private final CountDownLatch countDownLatch;
-        private final List<Response<T>> responses = new ArrayList<>();
+        private final List<Response<T>> responses = Collections.synchronizedList(new ArrayList<>());
 
-        synchronized void addAndCountdown(Response<T> response) {
+        void addAndCountdown(Response<T> response) {
             responses.add(response);
             countDownLatch.countDown();
         }
 
-        void await(){
+        void await() {
             try {
                 countDownLatch.await();
             } catch (InterruptedException e) {

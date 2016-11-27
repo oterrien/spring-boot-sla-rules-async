@@ -1,0 +1,12 @@
+
+server:
+  port: ${port:8080}
+
+logging:
+  level:
+    org.springframework.web: WARN
+    com.ote.test: TRACE
+
+spring:
+  profiles:
+    active: mysql, rabbitmq

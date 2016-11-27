@@ -8,10 +8,8 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class ResponseHandlerService {
 
-    public void handleResponse(Response response) {
+    public <T> void handleResponse(Response<T> response) {
 
-        log.warn(String.format("####-\tnumber of accepted elements : %s", response.getAcceptedElements().size()));
-
-        log.warn(String.format("####-\tnumber of rejected elements : %s", response.getRejectedElements().size()));
+        log.warn(String.format("####-HANDLER-number of elements {accepted:%d, rejected:%d)", response.getAcceptedElements().size(), response.getRejectedElements().size()));
     }
 }

@@ -5,7 +5,7 @@ server:
 logging:
   level:
     org.springframework.web: WARN
-    com.ote.test: TRACE
+    com.test: INFO
 
 spring:
   profiles:

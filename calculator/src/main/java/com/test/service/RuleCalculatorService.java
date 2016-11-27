@@ -6,6 +6,7 @@ import com.test.exchange.Response;
 import com.test.invoice.Invoice;
 import com.test.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,7 +20,7 @@ import java.io.IOException;
 public class RuleCalculatorService {
 
     @Value("${rabbitmq.queue.rule.name}")
-    private String queueName;
+    private String requestQueueName;
 
     @Autowired
     private RuleService ruleService;
@@ -31,9 +32,7 @@ public class RuleCalculatorService {
     public void init() throws Exception {
 
         log.info("####-RuleCalculatorService started");
-        channel.queueDeclare(queueName, false, false, false, null);
-        channel.basicQos(1);
-        channel.basicConsume(queueName, false, createConsumer());
+        channel.basicConsume(requestQueueName, false, createConsumer());
     }
 
     private Consumer createConsumer() {
@@ -46,7 +45,7 @@ public class RuleCalculatorService {
 
                 Request<Invoice> request = JsonUtils.parse(new String(body, "UTF-8"), Request.class, Invoice.class);
 
-                log.info(String.format("####-Request received for page #%d - [%s]", request.getPageIndex(), properties.getCorrelationId()));
+                log.debug(String.format("####-Request received for page #%d - [%s]", request.getPageIndex(), properties.getCorrelationId()));
 
                 AMQP.BasicProperties replyProps = new AMQP.BasicProperties
                         .Builder()
@@ -56,11 +55,10 @@ public class RuleCalculatorService {
                 Response<Invoice> result = ruleService.applyRules(request);
 
                 String message = JsonUtils.serialize(result);
-
-                channel.basicPublish("", properties.getReplyTo(), replyProps, message.getBytes("UTF-8"));
+                channel.basicPublish(StringUtils.EMPTY, properties.getReplyTo(), replyProps, message.getBytes("UTF-8"));
                 channel.basicAck(envelope.getDeliveryTag(), false);
 
-                log.info(String.format("####-Response sent for page #%d - [%s]", request.getPageIndex(), properties.getCorrelationId()));
+                log.debug(String.format("####-Response sent for page #%d - [%s]", request.getPageIndex(), properties.getCorrelationId()));
             }
         };
     }

@@ -20,7 +20,7 @@ public class RuleService {
 
     public <T> Response<T> applyRules(Request<T> request) {
 
-        //wait_(request.getEntities().size());
+        wait_(request.getEntities().size());
 
         Response<T> response = new Response<>();
         response.setPageIndex(request.getPageIndex());
@@ -41,8 +41,8 @@ public class RuleService {
         Optional.ofNullable(mapResult.get(Element.Status.REJECTED)).
                 ifPresent(p -> response.getRejectedElements().addAll(p));
 
-        log.warn(String.format("####-number of accepted elements in page #%d : %d", response.getPageIndex(), response.getAcceptedElements().size()));
-        log.warn(String.format("####-number of rejected elements in page #%d : %d", response.getPageIndex(), response.getRejectedElements().size()));
+        log.warn(String.format("####-CALCULATOR-number of elements in page#%d : {accepted:%d, rejected:%d)", response.getPageIndex() , response.getAcceptedElements().size(), response.getRejectedElements().size()));
+
 
         return response;
     }

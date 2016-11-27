@@ -1,10 +1,6 @@
 
 rabbitmq:
   host: localhost
-  exchange:
-    log:
-      name: logs
-      type: fanout
   queue:
     rule:
-      name: sla-rule-queue
+      name: sla-rule-request-queue

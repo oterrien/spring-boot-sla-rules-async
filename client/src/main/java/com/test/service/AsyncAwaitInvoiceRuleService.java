@@ -32,7 +32,7 @@ import java.util.stream.IntStream;
 @SuppressWarnings("unchecked")
 public class AsyncAwaitInvoiceRuleService {
 
-    @Value("${rabbitmq.queue.rule.name}")
+    @Value("${rabbitmq.queue.name}")
     private String requestQueueName;
 
     private String replyQueueName;

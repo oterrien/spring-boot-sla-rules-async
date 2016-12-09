@@ -1,6 +1,7 @@
 package com.test.controller;
 
 import com.test.service.AsyncAwaitInvoiceRuleService;
+import com.test.service.AsyncDispatcherRuleService;
 import com.test.service.AsyncNotAwaitInvoiceRuleService;
 import com.test.service.InvoiceRuleService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,11 +20,14 @@ public class InvoiceRuleController {
     private AsyncAwaitInvoiceRuleService asyncAwaitInvoiceRuleService;
 
     @Autowired
+    private AsyncDispatcherRuleService asyncDispatcherRuleService;
+
+    @Autowired
     private AsyncNotAwaitInvoiceRuleService asyncInvoiceRuleService;
 
     @RequestMapping(method = RequestMethod.POST, value = "/loadAndApplyRules")
     @ResponseBody
-    public ResponseEntity loadAndApplyRule() {
+    public ResponseEntity loadAndApplyRules() {
 
         invoiceRuleService.loadAndApplyRules();
         return new ResponseEntity(HttpStatus.OK);
@@ -31,11 +35,11 @@ public class InvoiceRuleController {
 
     @RequestMapping(method = RequestMethod.POST, value = "/loadAndApplyRulesAsync")
     @ResponseBody
-    public ResponseEntity loadAndApplyRule(@RequestParam(name = "pageSize", defaultValue = "0") int pageSize,
-                                           @RequestParam(name = "withAwait", defaultValue = "false") boolean withAwait) {
+    public ResponseEntity loadAndApplyRulesAsync(@RequestParam(name = "pageSize", defaultValue = "0") int pageSize,
+                                                 @RequestParam(name = "withAwait", defaultValue = "false") boolean withAwait) {
 
         if (pageSize <= 0) {
-            return loadAndApplyRule();
+            return loadAndApplyRules();
         }
 
         if (withAwait) {
@@ -45,5 +49,17 @@ public class InvoiceRuleController {
             asyncInvoiceRuleService.loadAndApplyRules(pageSize);
             return new ResponseEntity(HttpStatus.ACCEPTED);
         }
+    }
+
+    @RequestMapping(method = RequestMethod.POST, value = "/loadAndApplyRulesWithDispatch")
+    @ResponseBody
+    public ResponseEntity loadAndApplyRulesWithDispatch(@RequestParam(name = "pageSize", defaultValue = "0") int pageSize) {
+
+        if (pageSize <= 0) {
+            return loadAndApplyRules();
+        }
+
+        asyncDispatcherRuleService.loadAndApplyRules(pageSize);
+        return new ResponseEntity(HttpStatus.ACCEPTED);
     }
 }

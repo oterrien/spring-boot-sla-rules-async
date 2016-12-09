@@ -9,17 +9,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 
+@Profile("impair")
 @Service
 @Slf4j
-@SuppressWarnings("unchecked")
-public class RuleCalculatorService {
+public class ImpairRuleCalculatorService {
 
-    @Value("${rabbitmq.queue.name}")
+    @Value("${rabbitmq.dispatch.queue.name.impair}")
     private String requestQueueName;
 
     @Autowired
@@ -31,7 +32,7 @@ public class RuleCalculatorService {
     @PostConstruct
     public void init() throws Exception {
 
-        log.info("####-RuleCalculatorService started");
+        log.info("####-ImpairRuleCalculatorService started");
         channel.basicConsume(requestQueueName, false, createConsumer());
     }
 
@@ -45,7 +46,7 @@ public class RuleCalculatorService {
 
                 Request<Invoice> request = JsonUtils.parse(new String(body, "UTF-8"), Request.class, Invoice.class);
 
-                log.debug(String.format("####-Request received for page #%d - [%s]", request.getPageIndex(), properties.getCorrelationId()));
+                log.info(String.format("####-Request received for page #%d - [%s]", request.getPageIndex(), properties.getCorrelationId()));
 
                 AMQP.BasicProperties replyProps = new AMQP.BasicProperties
                         .Builder()
@@ -62,4 +63,5 @@ public class RuleCalculatorService {
             }
         };
     }
+
 }

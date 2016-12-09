@@ -2,5 +2,6 @@
 rabbitmq:
   host: localhost
   queue:
-    rule:
-      name: sla-rule-request-queue
+    name: sla-rule-request-queue
+  exchange:
+    name: sla-rule-pair-dispatcher

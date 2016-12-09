@@ -8,10 +8,7 @@ import com.test.persistence.repository.IInvoiceRepository;
 import com.test.persistence.service.RulePersistenceService;
 import com.test.rule.Rule;
 import com.test.util.JsonUtils;
-import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -20,19 +17,17 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.IntStream;
 
 @Profile("rabbitmq")
 @Service
 @Slf4j
-@SuppressWarnings("unchecked")
-public class AsyncNotAwaitInvoiceRuleService {
+public class AsyncDispatcherRuleService {
 
-    @Value("${rabbitmq.queue.name}")
-    private String requestQueueName;
+    @Value("${rabbitmq.exchange.name}")
+    private String requestExchangeName;
 
     private String replyQueueName;
 
@@ -65,7 +60,7 @@ public class AsyncNotAwaitInvoiceRuleService {
                 try {
                     Response<Invoice> response = JsonUtils.parse(new String(body, "UTF-8"), Response.class, Invoice.class);
 
-                    log.debug(String.format("####-Response received for page #%d - [%s]", response.getPageIndex(), properties.getCorrelationId()));
+                    log.info(String.format("####-Response received for page #%d - [%s]", response.getPageIndex(), properties.getCorrelationId()));
 
                     handleResponse(response);
 
@@ -121,8 +116,10 @@ public class AsyncNotAwaitInvoiceRuleService {
                     replyTo(replyQueueName).
                     build();
 
+            String routingKey = request.getPageIndex() % 2 == 0 ? "pair" : "impair";
+
             String message = JsonUtils.serialize(request);
-            channel.basicPublish(StringUtils.EMPTY, requestQueueName, props, message.getBytes("UTF-8"));
+            channel.basicPublish(requestExchangeName, routingKey, props, message.getBytes("UTF-8"));
 
             log.debug(String.format("####-Request sent for page #%d - [%s]", request.getPageIndex(), correlationId));
 
